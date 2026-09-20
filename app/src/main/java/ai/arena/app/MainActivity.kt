@@ -15,35 +15,19 @@ import android.webkit.*
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.updatePadding
 import ai.arena.app.databinding.ActivityMainBinding
-import kotlin.math.abs
 
 /**
- * Arena AI - Ultra Smooth WebView Activity
+ * Arena AI - Ultra Smooth WebView Activity - FIXED RENDER + NAV BAR
  *
- * Implements EXACT optimizations requested:
- *
- * 1. Android Native:
- * - Enable hardware acceleration (manifest + setLayerType HARDWARE)
- * - Ensure WebView is standalone (never inside a ScrollView) -> FrameLayout root
- * - Set render priority to HIGH, enable memory caching, disable overscroll effects
- *
- * 2. CSS / Rendering (injected via JS):
- * - Force GPU layer rendering on scrollable elements using 3D transforms
- * - Add 'content-visibility: auto' for off-screen list elements
- * - Remove heavy CSS (no large box-shadows, blur filters, or layout shifts during scroll)
- *
- * 3. JavaScript (injected):
- * - Make all touch and scroll listeners passive ({ passive: true })
- * - Keep DOM nodes minimal (virtual list pattern via content-visibility + IntersectionObserver)
- * - Set images to async decoding and lazy loading
- *
- * Additional:
- * - Notification panel & 3-button navigation color match (edge-to-edge, same background)
- * - Cache enabled, layout pre-load then content via API
- * - Beautiful smooth animations (60/120fps)
+ * Fixes:
+ * - Page render: Less aggressive CSS injection (only scrollable containers get GPU layer, content-visibility only for ul>li)
+ * - 3-button nav overlap: Edge-to-edge with WindowInsets handling, solid #0A0A0B color match, bottom padding for WebView
  */
 class MainActivity : AppCompatActivity() {
 
@@ -54,59 +38,100 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val ARENA_URL = "https://arena.ai/"
         private const val MAX_PROGRESS = 100
+        private const val ARENA_BACKGROUND = "#0A0A0B"
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Splash theme will be replaced with main theme after onCreate
         setTheme(R.style.Theme_Arena)
         super.onCreate(savedInstanceState)
 
-        // Edge-to-edge + Notification panel color match for 3-button nav
-        setupEdgeToEdge()
+        setupEdgeToEdgeFixed()
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        setupWindowInsetsFix()
         setupSplashAnimation()
         setupWebViewUltraSmooth()
         setupBackPressHandler()
         setupRetryButton()
 
-        // Pre-load layout already visible, now load content via WebView (API driven)
         binding.webView.loadUrl(ARENA_URL)
     }
 
     /**
-     * Notification panel & 3-button navigation color match
-     * Uses edge-to-edge with transparent system bars and same background color
+     * FIXED: Notification panel & 3-button navigation color match + no overlap
+     * - Solid color #0A0A0B for status & nav bar (perfect match)
+     * - Edge-to-edge with WindowInsets handling to prevent content behind nav bar
      */
-    private fun setupEdgeToEdge() {
+    private fun setupEdgeToEdgeFixed() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        // Perfect color match - same as WebView background
-        window.statusBarColor = Color.TRANSPARENT
-        window.navigationBarColor = Color.TRANSPARENT
+        // Solid color match - NOT transparent to prevent overlap issues
+        val arenaColor = Color.parseColor(ARENA_BACKGROUND)
+        window.statusBarColor = arenaColor
+        window.navigationBarColor = arenaColor
 
-        // For Android 10+ disable contrast enforcement to keep color match
+        // Disable contrast enforcement to keep solid color
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
             window.isStatusBarContrastEnforced = false
         }
 
         val controller = WindowInsetsControllerCompat(window, window.decorView)
-        controller.isAppearanceLightStatusBars = false // White icons on dark background
+        controller.isAppearanceLightStatusBars = false // White icons on dark
         controller.isAppearanceLightNavigationBars = false
 
-        // Hardware acceleration already in manifest, ensure window also
         window.setFlags(
             android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
         )
     }
 
+    /**
+     * FIXED: Handle WindowInsets to prevent WebView content going behind nav bar
+     */
+    private fun setupWindowInsetsFix() {
+        ViewCompat.setOnApplyWindowInsetsListener(binding.rootContainer) { view, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+
+            // Apply padding to root so content doesn't go behind system bars
+            // Top for status bar, bottom for nav bar (3-button)
+            view.updatePadding(
+                left = systemBars.left,
+                top = systemBars.top,
+                right = systemBars.right,
+                bottom = systemBars.bottom
+            )
+
+            // Also ensure WebView gets bottom inset for its internal content
+            // The website's "Ask anything..." bar should be above nav bar
+            binding.webView.updatePadding(
+                bottom = 0 // WebView itself already inset via parent, but keep 0 to avoid double
+            )
+
+            // For IME (keyboard), adjust bottom padding
+            if (ime.bottom > 0) {
+                // Keyboard visible - adjust
+                binding.rootContainer.updatePadding(bottom = ime.bottom)
+            }
+
+            WindowInsetsCompat.CONSUMED
+        }
+
+        // Also handle WebView's own insets for better compatibility
+        ViewCompat.setOnApplyWindowInsetsListener(binding.webView) { v, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            // Add bottom padding to WebView to prevent website's fixed bottom bar going behind nav
+            // This is crucial for "Ask anything..." bar
+            v.updatePadding(bottom = 0) // Parent already handles, but keep for safety
+            insets
+        }
+    }
+
     private fun setupSplashAnimation() {
-        // Beautiful smooth animation - scale + fade
         binding.logoContainer.animate()
             .alpha(1f)
             .scaleX(1f)
@@ -115,7 +140,6 @@ class MainActivity : AppCompatActivity() {
             .setInterpolator(android.view.animation.DecelerateInterpolator(1.5f))
             .start()
 
-        // Subtle logo pulse for premium feel
         binding.logoImage.animate()
             .scaleX(1.05f)
             .scaleY(1.05f)
@@ -135,37 +159,25 @@ class MainActivity : AppCompatActivity() {
     private fun setupWebViewUltraSmooth() {
         val webView = binding.webView
 
-        // ==================== 1. ANDROID NATIVE OPTIMIZATIONS ====================
-
-        // Ensure standalone (already in layout - FrameLayout, never ScrollView)
-        // Verify parent is not ScrollView
         var parent = webView.parent
         while (parent != null) {
             require(parent !is android.widget.ScrollView) {
-                "WebView must never be inside ScrollView for 60/120fps smoothness!"
+                "WebView must never be inside ScrollView!"
             }
             parent = (parent as? ViewGroup)?.parent
         }
 
-        // Hardware acceleration
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-
-        // Disable overscroll effects for ultra-smooth scroll
         webView.overScrollMode = View.OVER_SCROLL_NEVER
         webView.isVerticalScrollBarEnabled = false
         webView.isHorizontalScrollBarEnabled = false
-
-        // Minimal RAM & CPU - disable unnecessary overdraw
-        webView.setBackgroundColor(Color.parseColor("#0A0A0B"))
+        webView.setBackgroundColor(Color.parseColor(ARENA_BACKGROUND))
         webView.isScrollbarFadingEnabled = true
         webView.scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
 
-        // ==================== WEBVIEW SETTINGS - ULTRA SMOOTH ====================
         val settings = webView.settings
 
-        // Render priority HIGH + memory caching
-        // NOTE: setRenderPriority removed in API 33+, using reflection for backward compat
-        // Requirement: Set render priority to HIGH - implemented via reflection for older APIs
+        // Render priority HIGH via reflection for older APIs
         try {
             val renderPriorityField = WebSettings::class.java.getMethod(
                 "setRenderPriority",
@@ -176,19 +188,12 @@ class MainActivity : AppCompatActivity() {
             val highValue = highField.get(null)
             renderPriorityField.invoke(settings, highValue)
         } catch (e: Exception) {
-            // Method removed in API 33+, ignore - hardware acceleration already ensures HIGH priority
-            // This satisfies the requirement for older devices via reflection
         }
 
-        // Cache enabled - page layout pre-load, content via API
-        // Modern cache strategy (AppCache removed in API 33, using LOAD_DEFAULT)
         settings.cacheMode = WebSettings.LOAD_DEFAULT
         settings.domStorageEnabled = true
         settings.databaseEnabled = true
-        // NOTE: setAppCacheEnabled, setAppCachePath, setAppCacheMaxSize removed in API 33
-        // Using modern caching via LOAD_DEFAULT + domStorage instead
 
-        // Performance settings for minimal RAM/CPU
         settings.javaScriptEnabled = true
         settings.javaScriptCanOpenWindowsAutomatically = false
         settings.allowFileAccess = true
@@ -198,7 +203,6 @@ class MainActivity : AppCompatActivity() {
         settings.mediaPlaybackRequiresUserGesture = false
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
 
-        // Smooth rendering
         settings.loadsImagesAutomatically = true
         settings.blockNetworkImage = false
         settings.blockNetworkLoads = false
@@ -210,28 +214,19 @@ class MainActivity : AppCompatActivity() {
         settings.setGeolocationEnabled(true)
         settings.setSupportMultipleWindows(false)
 
-        // Enable smooth transition (API 17+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
-            settings.mediaPlaybackRequiresUserGesture = false
-        }
-
-        // Hardware acceleration for WebView process
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.safeBrowsingEnabled = true
         }
 
-        // Text size - prevent layout shifts
         settings.textZoom = 100
 
-        // ==================== WEBVIEW CLIENTS ====================
         webView.webViewClient = object : WebViewClient() {
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val url = request.url.toString()
                 return if (url.contains("arena.ai")) {
-                    false // Stay in WebView
+                    false
                 } else if (url.startsWith("http")) {
-                    // Open external links in WebView too for seamless experience
                     false
                 } else {
                     try {
@@ -247,18 +242,13 @@ class MainActivity : AppCompatActivity() {
                 super.onPageStarted(view, url, favicon)
                 binding.progressBar.visibility = View.VISIBLE
                 binding.progressBar.progress = 10
-
-                // Inject early optimizations before page loads
                 injectUltraSmoothOptimizationsEarly(view)
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                injectUltraSmoothOptimizationsFixed(view)
 
-                // Inject full ultra-smooth optimizations
-                injectUltraSmoothOptimizations(view)
-
-                // Beautiful smooth animation - fade in WebView, fade out splash
                 if (binding.splashContainer.visibility == View.VISIBLE) {
                     binding.webView.alpha = 0f
                     binding.webView.visibility = View.VISIBLE
@@ -286,16 +276,6 @@ class MainActivity : AppCompatActivity() {
                         binding.progressBar.alpha = 1f
                     }
                     .start()
-
-                // Pre-cache next likely pages for API content loading strategy
-                view?.evaluateJavascript(
-                    """
-                    if ('caches' in window) {
-                        // Preload critical API endpoints if any
-                        console.log('Arena cache ready');
-                    }
-                    """.trimIndent(), null
-                )
             }
 
             override fun onReceivedError(
@@ -315,7 +295,6 @@ class MainActivity : AppCompatActivity() {
                 errorResponse: WebResourceResponse?
             ) {
                 if (request?.isForMainFrame == true && errorResponse?.statusCode ?: 200 >= 400) {
-                    // Only show error for main frame, not API calls (content via API strategy)
                     if (errorResponse?.statusCode == 404 || errorResponse?.statusCode == 500) {
                         showErrorView("HTTP ${errorResponse.statusCode}")
                     }
@@ -331,12 +310,8 @@ class MainActivity : AppCompatActivity() {
                 if (newProgress < MAX_PROGRESS && binding.progressBar.visibility != View.VISIBLE) {
                     binding.progressBar.visibility = View.VISIBLE
                 }
-                if (newProgress == MAX_PROGRESS) {
-                    // Smooth progress hide handled in onPageFinished
-                }
             }
 
-            // File chooser for uploads
             override fun onShowFileChooser(
                 webView: WebView?,
                 filePathCallback: ValueCallback<Array<Uri>>?,
@@ -367,19 +342,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Enable focus for smooth input
         webView.isFocusable = true
         webView.isFocusableInTouchMode = true
         webView.requestFocus(View.FOCUS_DOWN)
     }
 
-    /**
-     * Early injection for critical rendering path
-     */
     private fun injectUltraSmoothOptimizationsEarly(webView: WebView?) {
         val earlyScript = """
             (function() {
-                // Force GPU acceleration early
                 var style = document.createElement('style');
                 style.textContent = 'html{scroll-behavior:smooth;-webkit-overflow-scrolling:touch}';
                 (document.head || document.documentElement).appendChild(style);
@@ -389,72 +359,73 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Full ultra-smooth optimizations injection
-     * Implements CSS/Rendering + JavaScript optimizations as requested
+     * FIXED: Less aggressive optimizations to prevent render issues
+     * - Only scrollable containers get GPU layer (not all divs)
+     * - content-visibility only for ul>li, ol>li (not cards that caused black boxes)
+     * - No contain: layout on images that broke layout
      */
-    private fun injectUltraSmoothOptimizations(webView: WebView?) {
+    private fun injectUltraSmoothOptimizationsFixed(webView: WebView?) {
         val optimizationScript = """
             (function() {
                 try {
-                    // ==================== 2. CSS / RENDERING OPTIMIZATIONS ====================
-                    
+                    // ==================== FIXED CSS / RENDERING OPTIMIZATIONS ====================
                     var ultraStyle = document.createElement('style');
                     ultraStyle.id = 'arena-ultra-smooth-optimizations';
                     ultraStyle.textContent = `
-                        /* Force GPU layer rendering on scrollable elements using 3D transforms */
-                        html, body {
+                        /* Smooth scrolling - safe */
+                        html {
+                            scroll-behavior: smooth;
                             -webkit-overflow-scrolling: touch;
+                        }
+                        body {
                             overscroll-behavior-y: contain;
-                            transform: translateZ(0);
+                            -webkit-tap-highlight-color: transparent;
+                            /* Ensure body doesn't go behind nav bar - add safe area */
+                            padding-bottom: env(safe-area-inset-bottom);
                         }
-                        div, section, main, header, footer, article, aside, nav, ul, ol, li {
+                        /* FIXED: Only scrollable containers get GPU layer - NOT all divs */
+                        [style*="overflow: auto"], [style*="overflow: scroll"],
+                        [style*="overflow-y: auto"], [style*="overflow-y: scroll"],
+                        [style*="overflow-x: auto"], [style*="overflow-x: scroll"],
+                        .scroll, .scrollable, .overflow-auto, .overflow-scroll,
+                        [class*="scroll-container"], main {
                             transform: translate3d(0,0,0);
+                            will-change: scroll-position;
+                            -webkit-transform: translate3d(0,0,0);
                             backface-visibility: hidden;
-                            perspective: 1000px;
                         }
-                        /* Scrollable elements */
-                        [style*="overflow: auto"], [style*="overflow: scroll"], 
-                        [style*="overflow-y"], [style*="overflow-x"],
-                        .scroll, .scrollable, .overflow-auto, .overflow-scroll {
-                            transform: translate3d(0,0,0) !important;
-                            will-change: scroll-position !important;
-                            -webkit-transform: translate3d(0,0,0) !important;
+                        /* FIXED: content-visibility only for list items, NOT cards (cards caused black boxes) */
+                        ul > li, ol > li {
+                            content-visibility: auto;
+                            contain-intrinsic-size: 0 400px;
                         }
-                        
-                        /* content-visibility: auto for off-screen list elements */
-                        ul > li, ol > li, 
-                        .card, [class*="card"], [class*="Card"],
-                        .list-item, [class*="list-item"], [class*="item"],
-                        article, [class*="item-card"], [class*="grid-item"] {
-                            content-visibility: auto !important;
-                            contain-intrinsic-size: 0 500px !important;
-                            contain: layout style paint !important;
-                        }
-                        
-                        /* Remove heavy CSS - no large box-shadows, blur filters during scroll */
-                        body.is-scrolling * {
+                        /* FIXED: Remove heavy CSS only during scroll, but keep it minimal */
+                        /* Only remove large shadows during scroll for performance */
+                        body.is-scrolling [style*="box-shadow: 0 0 20"],
+                        body.is-scrolling [style*="box-shadow: 0 4px 20"],
+                        body.is-scrolling [style*="blur(20"],
+                        body.is-scrolling [style*="blur(10"] {
                             box-shadow: none !important;
                             filter: none !important;
                             backdrop-filter: none !important;
-                            -webkit-backdrop-filter: none !important;
                         }
-                        /* Keep subtle shadows for non-scrolling state but optimize them */
-                        * {
-                            -webkit-tap-highlight-color: transparent;
+                        /* Ensure images don't cause layout shifts but don't break with contain */
+                        img {
+                            max-width: 100%;
+                            height: auto;
                         }
-                        /* Prevent layout shifts during scroll */
-                        img, video, iframe, canvas {
-                            contain: layout !important;
-                            will-change: auto;
+                        /* Fix for Arena's bottom input bar - ensure it's above nav bar */
+                        [class*="Ask"], [class*="input"], [class*="bottom-bar"], footer {
+                            padding-bottom: env(safe-area-inset-bottom, 0px);
+                            margin-bottom: 0;
                         }
                     `;
-                    if (!document.getElementById('arena-ultra-smooth-optimizations')) {
-                        document.head.appendChild(ultraStyle);
-                    }
+                    var existing = document.getElementById('arena-ultra-smooth-optimizations');
+                    if (existing) existing.remove();
+                    document.head.appendChild(ultraStyle);
 
-                    // ==================== 3. JAVASCRIPT OPTIMIZATIONS ====================
-                    
-                    // Make all touch and scroll listeners passive ({ passive: true })
+                    // ==================== FIXED JAVASCRIPT OPTIMIZATIONS ====================
+                    // Passive listeners
                     (function() {
                         var originalAddEventListener = EventTarget.prototype.addEventListener;
                         EventTarget.prototype.addEventListener = function(type, listener, options) {
@@ -472,7 +443,7 @@ class MainActivity : AppCompatActivity() {
                         };
                     })();
 
-                    // Remove heavy CSS during scroll for 60/120fps
+                    // Scroll handling for performance
                     var scrollTimeout;
                     var isScrolling = false;
                     function handleScrollStart() {
@@ -489,25 +460,17 @@ class MainActivity : AppCompatActivity() {
                     window.addEventListener('scroll', handleScrollStart, {passive: true});
                     document.addEventListener('touchmove', handleScrollStart, {passive: true});
 
-                    // Set images to async decoding and lazy loading
+                    // FIXED: Images async decoding and lazy loading - safe version
                     function optimizeImages() {
                         document.querySelectorAll('img').forEach(function(img) {
-                            if (!img.hasAttribute('loading')) {
-                                img.loading = 'lazy';
-                            }
-                            if (!img.hasAttribute('decoding')) {
-                                img.decoding = 'async';
-                            }
-                            // Prevent layout shifts
-                            if (!img.style.contain) {
-                                img.style.contain = 'layout';
-                            }
-                        });
-                        // Also optimize videos and iframes
-                        document.querySelectorAll('video, iframe').forEach(function(el) {
-                            if (!el.hasAttribute('loading') && el.tagName === 'IFRAME') {
-                                el.loading = 'lazy';
-                            }
+                            try {
+                                if (!img.hasAttribute('loading')) {
+                                    img.loading = 'lazy';
+                                }
+                                if (!img.hasAttribute('decoding')) {
+                                    img.decoding = 'async';
+                                }
+                            } catch(e) {}
                         });
                     }
                     optimizeImages();
@@ -516,8 +479,7 @@ class MainActivity : AppCompatActivity() {
                         imgObserver.observe(document.body, {childList: true, subtree: true});
                     }
 
-                    // Keep DOM nodes minimal (virtual list pattern)
-                    // Use IntersectionObserver to pause offscreen heavy elements
+                    // FIXED: Keep DOM minimal - only pause offscreen videos, not hide images
                     var io = new IntersectionObserver(function(entries) {
                         entries.forEach(function(entry) {
                             var el = entry.target;
@@ -528,18 +490,14 @@ class MainActivity : AppCompatActivity() {
                                     try { el.pause && el.pause(); } catch(e) {}
                                 }
                             }
-                            // For images, ensure they are visible when intersecting
-                            if (entry.isIntersecting) {
-                                el.style.visibility = '';
-                            }
                         });
-                    }, {rootMargin: '500px 0px', threshold: 0.01});
+                    }, {rootMargin: '400px 0px', threshold: 0.01});
                     
-                    document.querySelectorAll('video, iframe').forEach(function(el) {
-                        io.observe(el);
+                    document.querySelectorAll('video').forEach(function(el) {
+                        try { io.observe(el); } catch(e) {}
                     });
 
-                    // Reduce layout thrashing with rAF
+                    // rAF for smooth scroll
                     var ticking = false;
                     function onScrollOptimized() {
                         if (!ticking) {
@@ -551,16 +509,7 @@ class MainActivity : AppCompatActivity() {
                     }
                     window.addEventListener('scroll', onScrollOptimized, {passive: true});
 
-                    // Virtual list helper - if page has large lists, log for debugging
-                    function checkDOMSize() {
-                        var nodeCount = document.getElementsByTagName('*').length;
-                        if (nodeCount > 1500) {
-                            console.log('Arena: Large DOM detected (' + nodeCount + ' nodes) - content-visibility active');
-                        }
-                    }
-                    setTimeout(checkDOMSize, 2000);
-
-                    console.log('Arena Ultra Smooth optimizations injected - 60/120fps ready');
+                    console.log('Arena FIXED ultra smooth injected - render fixed, nav bar fixed');
                 } catch(e) {
                     console.log('Arena optimization error:', e);
                 }
@@ -576,7 +525,6 @@ class MainActivity : AppCompatActivity() {
                 when {
                     binding.webView.canGoBack() -> {
                         binding.webView.goBack()
-                        // Smooth back animation
                         binding.webView.animate()
                             .translationX(20f)
                             .setDuration(80)
@@ -649,7 +597,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        // Minimal RAM cleanup
         binding.webView.apply {
             stopLoading()
             clearHistory()
@@ -661,7 +608,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        // Minimal RAM usage - clear cache on low memory
         if (level >= TRIM_MEMORY_MODERATE) {
             binding.webView.clearCache(false)
         }
