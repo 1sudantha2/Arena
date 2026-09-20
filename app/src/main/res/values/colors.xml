@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Arena AI Brand Colors - Matched for Notification Panel & Navigation -->
+    <color name="arena_background">#0A0A0B</color>
+    <color name="arena_surface">#111113</color>
+    <color name="arena_surface_variant">#1A1A1D</color>
+    <color name="arena_primary">#8B5CF6</color>
+    <color name="arena_primary_variant">#7C3AED</color>
+    <color name="arena_on_primary">#FFFFFF</color>
+    <color name="arena_on_surface">#FFFFFF</color>
+    <color name="arena_on_surface_variant">#A1A1AA</color>
+    <color name="arena_outline">#27272A</color>
+    <color name="arena_error">#EF4444</color>
+
+    <!-- Status & Navigation Bar - Perfect Match for 3-button nav -->
+    <color name="status_bar">#0A0A0B</color>
+    <color name="navigation_bar">#0A0A0B</color>
+    <color name="navigation_bar_dark">#0A0A0B</color>
+
+    <!-- Splash & Loading -->
+    <color name="splash_background">#0A0A0B</color>
+    <color name="shimmer_base">#1A1A1D</color>
+    <color name="shimmer_highlight">#27272A</color>
+
+    <color name="transparent">#00000000</color>
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
+</resources>

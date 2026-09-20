@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ULTRA SMOOTH WEBVIEW LAYOUT
+     - Standalone WebView (never inside ScrollView) for 60/120fps
+     - Hardware accelerated, minimal overdraw
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/rootContainer"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/arena_background"
+    android:clipToPadding="false">
+
+    <!-- WebView - STANDALONE, never inside ScrollView -->
+    <WebView
+        android:id="@+id/webView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:overScrollMode="never"
+        android:scrollbars="none"
+        android:layerType="hardware"
+        android:visibility="invisible" />
+
+    <!-- Top Progress Bar - smooth 60fps animation -->
+    <com.google.android.material.progressindicator.LinearProgressIndicator
+        android:id="@+id/progressBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:indeterminate="false"
+        app:indicatorColor="@color/arena_primary"
+        app:trackColor="@color/transparent"
+        app:trackThickness="2.5dp"
+        android:visibility="gone" />
+
+    <!-- Splash / Preload Layout - Layout pre-loads before content API -->
+    <FrameLayout
+        android:id="@+id/splashContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/splash_background"
+        android:clipChildren="false">
+
+        <!-- Center Logo with smooth scale animation -->
+        <LinearLayout
+            android:id="@+id/logoContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:alpha="0">
+
+            <ImageView
+                android:id="@+id/logoImage"
+                android:layout_width="96dp"
+                android:layout_height="96dp"
+                android:src="@drawable/ic_logo"
+                android:contentDescription="Arena Logo" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="Arena"
+                android:textColor="@color/white"
+                android:textSize="28sp"
+                android:fontFamily="sans-serif-medium"
+                android:letterSpacing="0.05" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="AI Models • Ultra Smooth"
+                android:textColor="@color/arena_on_surface_variant"
+                android:textSize="12sp"
+                android:letterSpacing="0.08" />
+
+            <!-- Shimmer loading placeholder - preloaded layout -->
+            <LinearLayout
+                android:layout_width="160dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp"
+                android:orientation="vertical"
+                android:gravity="center">
+
+                <View
+                    android:layout_width="120dp"
+                    android:layout_height="8dp"
+                    android:background="@drawable/bg_progress"
+                    android:alpha="0.6" />
+
+                <View
+                    android:layout_width="80dp"
+                    android:layout_height="8dp"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bg_progress"
+                    android:alpha="0.35" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Bottom branding -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="28dp"
+            android:text="arena.ai"
+            android:textColor="@color/arena_on_surface_variant"
+            android:textSize="11sp"
+            android:alpha="0.6"
+            android:letterSpacing="0.1" />
+
+    </FrameLayout>
+
+    <!-- Error View - smooth slide up animation -->
+    <LinearLayout
+        android:id="@+id/errorView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="32dp"
+        android:background="@color/arena_background"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:src="@drawable/ic_error"
+            android:alpha="0.8" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/error_title"
+            android:textColor="@color/white"
+            android:textSize="20sp"
+            android:fontFamily="sans-serif-medium" />
+
+        <TextView
+            android:id="@+id/errorMessage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/error_message"
+            android:textColor="@color/arena_on_surface_variant"
+            android:textSize="14sp"
+            android:gravity="center" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/retryButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:text="@string/retry"
+            android:textColor="@color/white"
+            app:cornerRadius="12dp"
+            style="@style/Widget.Material3.Button" />
+
+    </LinearLayout>
+
+</FrameLayout>

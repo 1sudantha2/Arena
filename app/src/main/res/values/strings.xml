@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Arena</string>
+    <string name="loading">Loading Arena…</string>
+    <string name="error_title">Connection Issue</string>
+    <string name="error_message">Unable to load Arena. Check your connection.</string>
+    <string name="retry">Retry</string>
+    <string name="offline_message">You are offline</string>
+    <string name="exit_confirm">Press back again to exit</string>
+</resources>

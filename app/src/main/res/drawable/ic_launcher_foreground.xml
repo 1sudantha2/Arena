@@ -1,0 +1,29 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Arena A logo for adaptive icon - centered 72dp safe zone -->
+    <group
+        android:scaleX="0.85"
+        android:scaleY="0.85"
+        android:translateX="8.1"
+        android:translateY="8.1">
+
+        <path
+            android:fillColor="#8B5CF6"
+            android:pathData="M54,22L82,82L74.5,82L69,70L39,70L33.5,82L26,82Z" />
+
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M43.5,62L64.5,62L54,40Z"
+            android:fillAlpha="0.95" />
+
+        <path
+            android:fillColor="#A78BFA"
+            android:pathData="M54,72L58,82L50,82Z" />
+
+    </group>
+
+</vector>

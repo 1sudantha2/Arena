@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Base Theme - Perfect color match for notification panel & 3-button navigation -->
+    <style name="Theme.Arena" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/arena_primary</item>
+        <item name="colorPrimaryVariant">@color/arena_primary_variant</item>
+        <item name="colorOnPrimary">@color/arena_on_primary</item>
+        <item name="android:colorBackground">@color/arena_background</item>
+        <item name="colorOnBackground">@color/arena_on_surface</item>
+        <item name="colorSurface">@color/arena_surface</item>
+        <item name="colorOnSurface">@color/arena_on_surface</item>
+        <item name="colorSurfaceVariant">@color/arena_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/arena_on_surface_variant</item>
+        <item name="android:statusBarColor">@color/status_bar</item>
+        <item name="android:navigationBarColor">@color/navigation_bar</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowTranslucentStatus">false</item>
+        <item name="android:windowTranslucentNavigation">false</item>
+        <!-- Smooth transitions -->
+        <item name="android:windowContentTransitions">true</item>
+        <item name="android:windowAllowEnterTransitionOverlap">true</item>
+        <item name="android:windowAllowReturnTransitionOverlap">true</item>
+    </style>
+
+    <!-- Splash Theme - Shown while app starts -->
+    <style name="Theme.Arena.Splash" parent="Theme.Arena">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+        <item name="android:statusBarColor">@color/splash_background</item>
+        <item name="android:navigationBarColor">@color/splash_background</item>
+        <item name="android:windowSplashScreenBackground" tools:targetApi="s">@color/splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/ic_logo</item>
+    </style>
+
+</resources>

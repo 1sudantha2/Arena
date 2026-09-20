@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/splash_background" />
+    <!-- Subtle gradient glow for premium feel -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="135"
+                android:centerColor="#0A0A0B"
+                android:endColor="#1A1033"
+                android:startColor="#0A0A0B"
+                android:type="linear" />
+        </shape>
+    </item>
+    <!-- Center logo with smooth animation target -->
+    <item
+        android:width="96dp"
+        android:height="96dp"
+        android:gravity="center"
+        android:drawable="@drawable/ic_logo" />
+</layer-list>
