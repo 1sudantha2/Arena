@@ -16,18 +16,19 @@ class ArenaApplication : Application() {
         }
 
         // Pre-warm WebView for faster startup & cache enable
-        // This helps with layout pre-load strategy
         try {
-            // Trigger WebView initialization early
             WebViewCompat.getCurrentWebViewPackage(this)
         } catch (e: Exception) {
             e.printStackTrace()
         }
 
-        // Optimize for low RAM devices
-        if (isLowRamDevice()) {
-            // Reduce cache size for low RAM
-            WebView.setDataDirectorySuffix("arena_lowram")
+        // Optimize for low RAM devices - setDataDirectorySuffix requires API 28+
+        if (isLowRamDevice() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            try {
+                WebView.setDataDirectorySuffix("arena_lowram")
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 

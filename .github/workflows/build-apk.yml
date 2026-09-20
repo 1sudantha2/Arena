@@ -35,7 +35,6 @@ jobs:
           echo "ANDROID_HOME=${ANDROID_HOME}"
           echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}"
           
-          # Find sdkmanager
           SDKMANAGER=""
           if [ -f "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" ]; then
             SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
@@ -44,7 +43,6 @@ jobs:
             export ANDROID_HOME="/usr/local/lib/android/sdk"
             export ANDROID_SDK_ROOT="/usr/local/lib/android/sdk"
           else
-            # Search
             SDKMANAGER=$(find /usr/local -name sdkmanager -type f 2>/dev/null | head -1)
           fi
           
@@ -52,14 +50,10 @@ jobs:
           ls -lh "${ANDROID_HOME}/platforms/" || true
           ls -lh "${ANDROID_HOME}/build-tools/" || true
           
-          # Accept licenses and install required components
-          yes | $SDKMANAGER --licenses || echo "Licenses acceptance done or failed, continuing"
+          yes | $SDKMANAGER --licenses || echo "Licenses acceptance done"
           $SDKMANAGER --install "platform-tools" "platforms;android-34" "build-tools;34.0.0" || echo "Install attempted"
-          
-          # List installed
           $SDKMANAGER --list_installed || true
           
-          # Ensure ANDROID_HOME is set for gradle
           echo "ANDROID_HOME=${ANDROID_HOME}" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}" >> $GITHUB_ENV
 
@@ -68,7 +62,7 @@ jobs:
           echo "=== Checking Gradle Wrapper ==="
           ls -la gradle/wrapper/ || echo "no wrapper dir"
           if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
-            echo "Wrapper jar missing - generating with gradle wrapper"
+            echo "Wrapper jar missing - generating"
             gradle wrapper --gradle-version 8.5 --distribution-type bin
           fi
           chmod +x gradlew
@@ -76,46 +70,55 @@ jobs:
           ./gradlew --version || gradle --version
 
       - name: Build Debug APK - Arena
+        id: build_debug
         run: |
-          ./gradlew assembleDebug --stacktrace --info
+          set -o pipefail
+          ./gradlew assembleDebug --stacktrace 2>&1 | tee build-debug.log
           echo "=== Debug APK built ==="
           ls -lh app/build/outputs/apk/debug/
 
       - name: Build Release APK - Arena (unsigned)
+        if: success()
         run: |
-          ./gradlew assembleRelease --stacktrace
+          set -o pipefail
+          ./gradlew assembleRelease --stacktrace 2>&1 | tee build-release.log
           echo "=== Release APK built ==="
           ls -lh app/build/outputs/apk/release/
 
-      - name: List & Rename APKs to Arena
+      - name: List APKs
+        if: always()
         run: |
           echo "=== Debug ==="
           ls -lh app/build/outputs/apk/debug/ || true
           echo "=== Release ==="
           ls -lh app/build/outputs/apk/release/ || true
           mkdir -p build/outputs
-          # Copy all apks
-          find app/build/outputs -name "*.apk" -type f | while read apk; do
-            echo "Found APK: $apk"
-            cp "$apk" build/outputs/
-          done
-          ls -lh build/outputs/
-          # Ensure Arena naming
-          cd build/outputs
-          for f in *.apk; do
-            echo "Processing $f"
-          done
-          cd ../..
+          find app/build/outputs -name "*.apk" -type f -exec cp {} build/outputs/ \; || true
+          ls -lh build/outputs/ || true
+
+      - name: Upload Build Logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build-*.log
+            app/build/reports/
+            app/build/outputs/logs/
+          retention-days: 7
+          if-no-files-found: warn
 
       - name: Upload Debug APK Artifact
+        if: success() || steps.build_debug.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: Arena-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 30
-          if-no-files-found: error
+          if-no-files-found: warn
 
       - name: Upload Release APK Artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Arena-release-apk
@@ -124,7 +127,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Create Release (on main push)
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && success()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
@@ -132,31 +135,16 @@ jobs:
           body: |
             Arena AI Android App - Ultra Smooth WebView Build
             
-            **Implemented Optimizations:**
-
-            **1. Android Native:**
-            - ✅ Hardware acceleration enabled (manifest + LAYER_TYPE_HARDWARE)
-            - ✅ WebView standalone (never inside ScrollView) - FrameLayout root
-            - ✅ Render priority HIGH, memory caching (50MB), overscroll disabled
-
-            **2. CSS / Rendering (JS Injection):**
-            - ✅ Force GPU layer rendering on scrollable elements using 3D transforms
-            - ✅ content-visibility: auto for off-screen list elements
-            - ✅ Remove heavy CSS (box-shadows, blur filters removed during scroll)
-
-            **3. JavaScript (JS Injection):**
-            - ✅ All touch/scroll listeners passive ({ passive: true })
-            - ✅ DOM nodes minimal (virtual list pattern)
-            - ✅ Images async decoding + lazy loading
-
-            **Extra:**
-            - ✅ Notification panel & 3-button navigation color matched (#0A0A0B)
-            - ✅ Cache enabled, layout pre-load then content via API
-            - ✅ Beautiful smooth animations (60/120fps)
+            **Optimizations:**
+            - Hardware acceleration, standalone WebView, HIGH priority, cache, no overscroll
+            - GPU layer 3D transforms, content-visibility auto, no heavy CSS during scroll
+            - Passive listeners, virtual list, lazy images async
+            - Notification & 3-button nav color matched #0A0A0B
+            - Cache + layout preload + API content + smooth animations
 
             Package: ai.arena.app
-            APK Name: Arena
-            Built from: ${{ github.sha }}
+            APK: Arena
+            Commit: ${{ github.sha }}
           files: |
             app/build/outputs/apk/debug/*.apk
             app/build/outputs/apk/release/*.apk
