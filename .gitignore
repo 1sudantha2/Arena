@@ -81,3 +81,4 @@ lint/tmp/
 
 # NDK
 obj/
+BUILD_FAILURE_LOG.md
