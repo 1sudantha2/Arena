@@ -167,15 +167,22 @@ class MainActivity : AppCompatActivity() {
         @Suppress("DEPRECATION")
         settings.renderPriority = WebSettings.RenderPriority.HIGH
 
-        // Cache enabled - page layout pre-load, content via API
+        // Cache enabled - page layout pre-load, content via API (Modern cache, no deprecated AppCache)
         settings.cacheMode = WebSettings.LOAD_DEFAULT
         settings.domStorageEnabled = true
         settings.databaseEnabled = true
-        @Suppress("DEPRECATION")
-        settings.setAppCacheEnabled(true)
-        @Suppress("DEPRECATION")
-        settings.setAppCachePath(cacheDir.absolutePath)
-        settings.setAppCacheMaxSize(50 * 1024 * 1024) // 50MB cache
+        // AppCache removed in API 33+, using modern cache via LOAD_DEFAULT + domStorage
+        // For older APIs, try to enable AppCache safely
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            try {
+                @Suppress("DEPRECATION")
+                settings.setAppCacheEnabled(true)
+                @Suppress("DEPRECATION")
+                settings.setAppCachePath(cacheDir.absolutePath)
+            } catch (e: Exception) {
+                // Ignore - removed in newer APIs
+            }
+        }
 
         // Performance settings for minimal RAM/CPU
         settings.javaScriptEnabled = true
