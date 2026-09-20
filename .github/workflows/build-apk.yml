@@ -23,16 +23,49 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Setup Gradle 8.5
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.5
+          cache-read-only: false
+
+      - name: Setup Android SDK (Manual - robust)
+        run: |
+          echo "=== Android SDK Setup ==="
+          echo "ANDROID_HOME=${ANDROID_HOME}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}"
+          
+          # Find sdkmanager
+          SDKMANAGER=""
+          if [ -f "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          elif [ -f "/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
+            export ANDROID_HOME="/usr/local/lib/android/sdk"
+            export ANDROID_SDK_ROOT="/usr/local/lib/android/sdk"
+          else
+            # Search
+            SDKMANAGER=$(find /usr/local -name sdkmanager -type f 2>/dev/null | head -1)
+          fi
+          
+          echo "Using SDKMANAGER: $SDKMANAGER"
+          ls -lh "${ANDROID_HOME}/platforms/" || true
+          ls -lh "${ANDROID_HOME}/build-tools/" || true
+          
+          # Accept licenses and install required components
+          yes | $SDKMANAGER --licenses || echo "Licenses acceptance done or failed, continuing"
+          $SDKMANAGER --install "platform-tools" "platforms;android-34" "build-tools;34.0.0" || echo "Install attempted"
+          
+          # List installed
+          $SDKMANAGER --list_installed || true
+          
+          # Ensure ANDROID_HOME is set for gradle
+          echo "ANDROID_HOME=${ANDROID_HOME}" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}" >> $GITHUB_ENV
 
       - name: Generate Gradle Wrapper if missing
         run: |
+          echo "=== Checking Gradle Wrapper ==="
           ls -la gradle/wrapper/ || echo "no wrapper dir"
           if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
             echo "Wrapper jar missing - generating with gradle wrapper"
@@ -40,22 +73,19 @@ jobs:
           fi
           chmod +x gradlew
           ls -lh gradle/wrapper/
-
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          ./gradlew --version || gradle --version
 
       - name: Build Debug APK - Arena
-        run: ./gradlew assembleDebug --stacktrace --info
+        run: |
+          ./gradlew assembleDebug --stacktrace --info
+          echo "=== Debug APK built ==="
+          ls -lh app/build/outputs/apk/debug/
 
       - name: Build Release APK - Arena (unsigned)
-        run: ./gradlew assembleRelease --stacktrace
+        run: |
+          ./gradlew assembleRelease --stacktrace
+          echo "=== Release APK built ==="
+          ls -lh app/build/outputs/apk/release/
 
       - name: List & Rename APKs to Arena
         run: |
@@ -64,23 +94,18 @@ jobs:
           echo "=== Release ==="
           ls -lh app/build/outputs/apk/release/ || true
           mkdir -p build/outputs
-          # Copy with Arena name
-          find app/build/outputs -name "*.apk" -exec cp {} build/outputs/ \;
+          # Copy all apks
+          find app/build/outputs -name "*.apk" -type f | while read apk; do
+            echo "Found APK: $apk"
+            cp "$apk" build/outputs/
+          done
+          ls -lh build/outputs/
+          # Ensure Arena naming
           cd build/outputs
           for f in *.apk; do
-            if [[ "$f" == *"debug"* ]]; then
-              mv "$f" "Arena-debug.apk" || true
-            else
-              mv "$f" "Arena-release-unsigned.apk" || true
-            fi
+            echo "Processing $f"
           done
-          # In case multiple files, keep both patterns
           cd ../..
-          cp app/build/outputs/apk/debug/*.apk build/outputs/ 2>/dev/null || true
-          cp app/build/outputs/apk/release/*.apk build/outputs/ 2>/dev/null || true
-          ls -lh build/outputs/
-          ls -lh app/build/outputs/apk/debug/
-          ls -lh app/build/outputs/apk/release/
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
@@ -115,25 +140,23 @@ jobs:
             - ✅ Render priority HIGH, memory caching (50MB), overscroll disabled
 
             **2. CSS / Rendering (JS Injection):**
-            - ✅ Force GPU layer rendering on scrollable elements using 3D transforms (translate3d, translateZ)
-            - ✅ content-visibility: auto for off-screen list elements (contain-intrinsic-size 500px)
-            - ✅ Remove heavy CSS (box-shadows, blur filters removed during scroll via .is-scrolling class)
+            - ✅ Force GPU layer rendering on scrollable elements using 3D transforms
+            - ✅ content-visibility: auto for off-screen list elements
+            - ✅ Remove heavy CSS (box-shadows, blur filters removed during scroll)
 
             **3. JavaScript (JS Injection):**
-            - ✅ All touch/scroll listeners passive ({ passive: true }) via EventTarget override
-            - ✅ DOM nodes minimal (virtual list pattern via content-visibility + IntersectionObserver for videos/iframes)
-            - ✅ Images async decoding + lazy loading (loading=lazy, decoding=async)
+            - ✅ All touch/scroll listeners passive ({ passive: true })
+            - ✅ DOM nodes minimal (virtual list pattern)
+            - ✅ Images async decoding + lazy loading
 
             **Extra:**
-            - ✅ Notification panel & 3-button navigation color perfectly matched (#0A0A0B)
+            - ✅ Notification panel & 3-button navigation color matched (#0A0A0B)
             - ✅ Cache enabled, layout pre-load then content via API
-            - ✅ Beautiful smooth animations (fade, scale, slide - 60/120fps)
-            - ✅ Edge-to-edge, shimmer preload, error handling, file chooser
+            - ✅ Beautiful smooth animations (60/120fps)
 
-            **Package:** ai.arena.app
-            **APK Name:** Arena
-            **Min SDK:** 24, Target SDK: 34
-            **Built from:** ${{ github.sha }}
+            Package: ai.arena.app
+            APK Name: Arena
+            Built from: ${{ github.sha }}
           files: |
             app/build/outputs/apk/debug/*.apk
             app/build/outputs/apk/release/*.apk

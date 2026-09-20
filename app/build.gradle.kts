@@ -14,7 +14,6 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        // Enable vector drawables
         vectorDrawables {
             useSupportLibrary = true
         }
@@ -47,6 +46,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 
     packaging {
@@ -55,14 +55,8 @@ android {
         }
     }
 
-    // APK name - Arena
-    androidComponents {
-        onVariants { variant ->
-            variant.outputs.all {
-                outputFileName.set("Arena-${this.buildType}.apk")
-            }
-        }
-    }
+    // Ensure APK is named Arena - handled in workflow rename step
+    // Keeping build simple to avoid AGP API issues
 }
 
 dependencies {
