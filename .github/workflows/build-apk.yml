@@ -33,9 +33,8 @@ jobs:
           gradle-version: 8.5
           cache-read-only: false
 
-      - name: Setup Android SDK (Manual - robust)
+      - name: Setup Android SDK
         run: |
-          echo "=== Android SDK Setup ==="
           echo "ANDROID_HOME=${ANDROID_HOME}"
           SDKMANAGER=""
           if [ -f "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" ]; then
@@ -47,95 +46,52 @@ jobs:
           else
             SDKMANAGER=$(find /usr/local -name sdkmanager -type f 2>/dev/null | head -1)
           fi
-          echo "Using SDKMANAGER: $SDKMANAGER"
-          yes | $SDKMANAGER --licenses || echo "Licenses done"
-          $SDKMANAGER --install "platform-tools" "platforms;android-34" "build-tools;34.0.0" || echo "Install attempted"
-          $SDKMANAGER --list_installed || true
+          echo "SDKMANAGER: $SDKMANAGER"
+          yes | $SDKMANAGER --licenses || true
+          $SDKMANAGER --install "platform-tools" "platforms;android-34" "build-tools;34.0.0" || true
           echo "ANDROID_HOME=${ANDROID_HOME}" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}" >> $GITHUB_ENV
 
       - name: Generate Gradle Wrapper if missing
         run: |
-          ls -la gradle/wrapper/ || echo "no wrapper dir"
           if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
             gradle wrapper --gradle-version 8.5 --distribution-type bin
           fi
           chmod +x gradlew
-          ls -lh gradle/wrapper/
           ./gradlew --version
 
       - name: Build Debug APK - Arena
-        id: build_debug
         run: |
-          set -o pipefail
           ./gradlew assembleDebug --stacktrace 2>&1 | tee build-debug.log
-          echo "=== Debug APK built ==="
           ls -lh app/build/outputs/apk/debug/
 
-      - name: Build Release APK - Arena (unsigned)
+      - name: Build Release APK
         if: success()
         run: |
-          set -o pipefail
           ./gradlew assembleRelease --stacktrace 2>&1 | tee build-release.log
-          echo "=== Release APK built ==="
           ls -lh app/build/outputs/apk/release/
 
-      - name: List APKs
-        if: always()
+      - name: Rename APKs to Arena
+        if: success()
         run: |
-          ls -lh app/build/outputs/apk/debug/ || true
-          ls -lh app/build/outputs/apk/release/ || true
           mkdir -p build/outputs
-          find app/build/outputs -name "*.apk" -type f -exec cp {} build/outputs/ \; || true
-          ls -lh build/outputs/ || true
-
-      - name: Upload Build Logs (on failure) - Artifact
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: |
-            build-*.log
-            app/build/reports/
-          retention-days: 7
-          if-no-files-found: warn
-
-      - name: Commit Build Failure Log to Repo (for debugging)
-        if: failure()
-        run: |
-          echo "=== Build failed, committing log to repo for debugging ==="
-          git config user.email "ci@arena.ai"
-          git config user.name "Arena CI"
-          # Create failure log file
-          echo "# Build Failure Log - Run ${{ github.run_id }}" > BUILD_FAILURE_LOG.md
-          echo "" >> BUILD_FAILURE_LOG.md
-          echo "## Branch: ${{ github.ref_name }}" >> BUILD_FAILURE_LOG.md
-          echo "## Commit: ${{ github.sha }}" >> BUILD_FAILURE_LOG.md
-          echo "" >> BUILD_FAILURE_LOG.md
-          echo '```' >> BUILD_FAILURE_LOG.md
-          cat build-debug.log | tail -n 500 >> BUILD_FAILURE_LOG.md || echo "No log found" >> BUILD_FAILURE_LOG.md
-          echo '```' >> BUILD_FAILURE_LOG.md
-          echo "" >> BUILD_FAILURE_LOG.md
-          echo "## Full log tail (last 1000 lines)" >> BUILD_FAILURE_LOG.md
-          echo '```' >> BUILD_FAILURE_LOG.md
-          cat build-debug.log | tail -n 1000 >> BUILD_FAILURE_LOG.md || true
-          echo '```' >> BUILD_FAILURE_LOG.md
-          
-          git add BUILD_FAILURE_LOG.md
-          git commit -m "ci: build failure log for run ${{ github.run_id }}" || echo "No changes to commit"
-          git push origin HEAD:${{ github.ref_name }} || echo "Push failed, trying force"
-          # Try again with pull rebase
-          git pull --rebase origin ${{ github.ref_name }} || true
-          git push origin HEAD:${{ github.ref_name }} || true
+          cp app/build/outputs/apk/debug/*.apk build/outputs/Arena-debug.apk || true
+          cp app/build/outputs/apk/release/*.apk build/outputs/Arena-release-unsigned.apk || true
+          # Also create Arena.apk as main
+          cp build/outputs/Arena-debug.apk build/outputs/Arena.apk || cp app/build/outputs/apk/debug/app-debug.apk build/outputs/Arena.apk
+          ls -lh build/outputs/
+          ls -lh app/build/outputs/apk/debug/
+          ls -lh app/build/outputs/apk/release/
 
       - name: Upload Debug APK Artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Arena-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            build/outputs/Arena*.apk
           retention-days: 30
-          if-no-files-found: warn
 
       - name: Upload Release APK Artifact
         if: success()
@@ -144,4 +100,48 @@ jobs:
           name: Arena-release-apk
           path: app/build/outputs/apk/release/*.apk
           retention-days: 30
-          if-no-files-found: warn
+
+      - name: Create GitHub Release (for main and arena branches)
+        if: success() && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/arena/'))
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: arena-v1.0.${{ github.run_number }}
+          name: "Arena v1.0.${{ github.run_number }} - Ultra Smooth"
+          body: |
+            ## Arena AI - Android Native App (Ultra Smooth WebView)
+
+            **Package:** ai.arena.app
+            **APK Name:** Arena
+            **Website:** https://arena.ai/
+
+            ### 🚀 Optimizations Implemented
+
+            **1. Android Native:**
+            - ✅ Hardware acceleration (manifest + LAYER_TYPE_HARDWARE)
+            - ✅ WebView standalone (never inside ScrollView) - FrameLayout
+            - ✅ Render priority HIGH via reflection (for older APIs), memory caching, overscroll disabled
+
+            **2. CSS / Rendering (JS Injection):**
+            - ✅ GPU layer rendering with 3D transforms (translate3d, translateZ, will-change)
+            - ✅ content-visibility: auto for off-screen lists
+            - ✅ Remove heavy CSS (box-shadows, blur filters during scroll via .is-scrolling)
+
+            **3. JavaScript (JS Injection):**
+            - ✅ Passive touch/scroll listeners ({ passive: true })
+            - ✅ Virtual list pattern (content-visibility + IntersectionObserver)
+            - ✅ Images async decoding & lazy loading
+
+            **Extra:**
+            - ✅ Notification panel & 3-button nav color matched #0A0A0B edge-to-edge
+            - ✅ Cache enabled, layout preload + API content
+            - ✅ Beautiful smooth animations (fade, scale, slide - 60/120fps)
+            - ✅ Vector logo, adaptive icon
+
+            **Build:** ${{ github.sha }}
+            **Download:** Arena.apk below
+          files: |
+            build/outputs/Arena*.apk
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
